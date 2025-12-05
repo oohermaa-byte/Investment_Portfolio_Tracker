@@ -1,62 +1,54 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
+import plotly.express as px
 
-st.title("📊 Investment Portfolio Tracker")
+st.title("Investment Portfolio Tracker")
 
-st.write("Upload file portofolio Anda (CSV atau Excel dengan kolom: Ticker, Buy Price, Quantity).")
+uploaded_file = st.file_uploader("Upload Portfolio Excel/CSV", type=["csv", "xlsx"])
 
-# ⬇ File uploader — now accepts CSV & EXCEL
-uploaded_file = st.file_uploader(
-    "Upload file",
-    type=["csv", "xlsx"]
-)
-
-# Process uploaded file
 if uploaded_file is not None:
 
-    # Read CSV or Excel
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    file_name = uploaded_file.name.lower()
 
-    st.subheader("📄 Data Portofolio")
-    st.dataframe(df)
+    try:
+        # Deteksi file
+        if file_name.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file)
+        elif file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            st.error("Format file tidak didukung.")
+            st.stop()
 
-    # Fetch latest stock prices
-    st.subheader("💹 Mengambil Harga Saham Terkini...")
+        st.success("File berhasil dibaca!")
 
-    df["Current Price"] = 0.0
+        st.subheader("Data Portfolio")
+        st.write(df)
 
-    tickers = df["Ticker"].tolist()
+        # ---------- BAR CHART NILAI INVESTASI ----------
+        if "Asset" in df.columns and "Current Value" in df.columns:
+            fig_value = px.bar(
+                df,
+                x="Asset",
+                y="Current Value",
+                title="Current Value per Asset",
+                text="Current Value"
+            )
+            st.plotly_chart(fig_value)
+        else:
+            st.warning("Kolom 'Asset' dan 'Current Value' tidak ditemukan.")
 
-    for i, ticker in enumerate(tickers):
-        try:
-            stock = yf.Ticker(ticker)
-            price = stock.history(period="1d")["Close"].iloc[-1]
-            df.loc[i, "Current Price"] = price
-        except:
-            df.loc[i, "Current Price"] = 0
+        # ---------- PIE CHART ALOKASI ----------
+        if "Asset" in df.columns and "Allocation" in df.columns:
+            fig_alloc = px.pie(
+                df,
+                names="Asset",
+                values="Allocation",
+                title="Portfolio Allocation (%)"
+            )
+            st.plotly_chart(fig_alloc)
+        else:
+            st.warning("Kolom 'Asset' dan 'Allocation' tidak ditemukan.")
 
-    # Calculate values
-    df["Investment"] = df["Buy Price"] * df["Quantity"]
-    df["Current Value"] = df["Current Price"] * df["Quantity"]
-    df["Profit/Loss"] = df["Current Value"] - df["Investment"]
-
-    st.subheader("📈 Hasil Perhitungan")
-    st.dataframe(df)
-
-    # Summary
-    total_investment = df["Investment"].sum()
-    total_value = df["Current Value"].sum()
-    total_profit = df["Profit/Loss"].sum()
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Investment", f"${total_investment:,.2f}")
-    col2.metric("Portfolio Value", f"${total_value:,.2f}")
-    col3.metric("Profit / Loss", f"${total_profit:,.2f}")
-
-    # Bar chart
-    st.subheader("📊 Portfolio Value Chart")
-    st.bar_chart(df.set_index("Ticker")["Current Value"])
+    except Exception as e:
+        st.error(f"Terjadi error saat membaca file: {e}")
